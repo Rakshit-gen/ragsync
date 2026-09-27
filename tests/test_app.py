@@ -56,3 +56,21 @@ def test_query_with_empty_corpus_returns_no_relevant_content(api_client):
 
     assert response.status_code == 200
     assert response.json()["answer"] == "No relevant content found."
+
+
+def test_reindex_rejects_blank_directory(api_client):
+    response = api_client.post("/reindex", json={"directory": "   "})
+
+    assert response.status_code == 422
+
+
+def test_reindex_rejects_nonexistent_directory(api_client, tmp_path):
+    response = api_client.post("/reindex", json={"directory": str(tmp_path / "does-not-exist")})
+
+    assert response.status_code == 404
+
+
+def test_query_rejects_blank_query(api_client):
+    response = api_client.post("/query", json={"query": ""})
+
+    assert response.status_code == 422

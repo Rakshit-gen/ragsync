@@ -1,7 +1,8 @@
 from dataclasses import asdict
+from pathlib import Path
 
-from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, field_validator
 
 from ragsync.config import STORE_PATH
 from ragsync.document_source import DirectorySource
@@ -24,13 +25,29 @@ def _placeholder_answer(query: str, chunks: list[dict]) -> str:
 class ReindexRequest(BaseModel):
     directory: str
 
+    @field_validator("directory")
+    @classmethod
+    def directory_must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("directory must not be blank")
+        return v
+
 
 class QueryRequest(BaseModel):
     query: str
 
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("query must not be blank")
+        return v
+
 
 @app.post("/reindex")
 def reindex(request: ReindexRequest) -> dict:
+    if not Path(request.directory).is_dir():
+        raise HTTPException(status_code=404, detail=f"directory not found: {request.directory}")
     report = _service.reindex(DirectorySource(request.directory))
     result = asdict(report)
     result["stale_hashes"] = list(result["stale_hashes"])
