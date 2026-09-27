@@ -55,3 +55,27 @@ def test_modified_chunk_content_is_reembedded(tmp_path):
     assert report.deleted == 0
     assert report.unchanged == 1
     assert store.get_metadata("doc1::0")["text"] == "hello there, changed"
+
+
+def test_removed_chunk_is_deleted_from_store(tmp_path):
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+    reindexer.reindex(FakeSource([Chunk("doc1", "doc1::0", "hello"), Chunk("doc1", "doc1::1", "world")]))
+
+    report = reindexer.reindex(FakeSource([Chunk("doc1", "doc1::0", "hello")]))
+
+    assert report.added == 0
+    assert report.modified == 0
+    assert report.deleted == 1
+    assert report.unchanged == 1
+    assert store.ids() == {"doc1::0"}
+
+
+def test_empty_corpus_reindex_is_clean(tmp_path):
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+
+    report = reindexer.reindex(FakeSource([]))
+
+    assert (report.added, report.modified, report.deleted, report.unchanged) == (0, 0, 0, 0)
+    assert len(store) == 0
