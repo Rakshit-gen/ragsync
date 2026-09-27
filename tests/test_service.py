@@ -55,6 +55,23 @@ def test_reindex_that_changes_a_grounding_chunk_invalidates_the_cache_entry(tmp_
     assert "14 days" in result.answer
 
 
+def test_reindex_that_deletes_a_grounding_chunk_invalidates_the_cache_entry(tmp_path):
+    """Cache invalidation must also cover the deletion path, not just
+    modification: an answer grounded in a chunk that later vanishes
+    entirely is just as stale as one grounded in a chunk that changed.
+    """
+    service = RagSyncService(str(tmp_path), top_k=1)
+    service.reindex(FakeSource([Chunk("policy", "policy::0", "Refunds are issued within 30 days.")]))
+    service.query("what is the refund policy?", fake_answer_fn)
+    assert len(service._cache) == 1
+
+    report = service.reindex(FakeSource([]))
+
+    assert report.deleted == 1
+    assert report.invalidated_cache_entries == 1
+    assert len(service._cache) == 0
+
+
 def test_reindex_unrelated_to_a_cached_query_leaves_it_cached(tmp_path):
     # top_k=1 so the cached answer is only ever grounded in the single most
     # relevant chunk, keeping this test's "unrelated" premise accurate.
