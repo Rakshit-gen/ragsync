@@ -1,3 +1,4 @@
+import threading
 import warnings
 
 import numpy as np
@@ -80,3 +81,42 @@ def test_search_over_many_vectors_produces_finite_scores_and_no_uncaught_warning
 
     assert results[0][0] == "id0"
     assert all(np.isfinite(score) for _, score in results)
+
+
+def test_concurrent_upsert_delete_and_search_do_not_crash_or_desync(tmp_path):
+    """Regression test for a real race: FastAPI runs sync endpoints in a
+    threadpool, so /reindex and /query can genuinely run concurrently.
+    Before the store held a lock, upsert/delete rebuilding _vectors/_ids by
+    full reassignment while search read _ids more than once reliably
+    produced IndexError (reproduced with ~2400 crashes in a few seconds of
+    3 writer + 3 reader threads on one store). This must run clean.
+    """
+    store = VectorStore(str(tmp_path))
+    store.upsert([f"id{i}" for i in range(50)], [[float(i)] * 4 for i in range(50)])
+    errors: list[Exception] = []
+
+    def writer() -> None:
+        for j in range(200):
+            ids = [f"w{j}_{k}" for k in range(5)]
+            vectors = [[float(j + k)] * 4 for k in range(5)]
+            try:
+                store.upsert(ids, vectors)
+                store.delete(ids)
+            except Exception as exc:  # noqa: BLE001 - the point is nothing raises
+                errors.append(exc)
+
+    def reader() -> None:
+        for _ in range(200):
+            try:
+                results = store.search([1.0, 1.0, 1.0, 1.0], top_k=10)
+                assert all(isinstance(id_, str) and np.isfinite(score) for id_, score in results)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+    threads = [threading.Thread(target=writer) for _ in range(3)] + [threading.Thread(target=reader) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
