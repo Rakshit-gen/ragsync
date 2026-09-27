@@ -84,7 +84,23 @@ boundary.
 - `DirectorySource` only reads `.txt`/`.md` files from a local directory;
   a different `DocumentSource` implementation is a small amount of code for
   any other source (DB, API, object storage).
+- `chunk_id` is `{source_id}::{paragraph-packing index}`. If an edit changes
+  how many chunks a document packs into (not just one chunk's text — e.g.
+  inserting a new paragraph near the top), every chunk after that point gets
+  a "new" id at reindex time: it's tracked as delete-old-id + add-new-id
+  rather than "modified", even where the underlying text is unchanged. The
+  incremental win still holds for edits confined to one paragraph, and for
+  the common case of most documents in a corpus being untouched (what the
+  benchmark measures) — it does not hold for a mid-document structural edit
+  to a large document. A content-addressed chunk id (hash-based, independent
+  of position) would close this gap; out of scope for this pass.
 
-**Untested:** behavior under concurrent reindex + query calls (no locking is
-implemented; this project assumes single-writer usage, like a periodic
-reindex job).
+**Concurrency:** `VectorStore` is locked (a single `threading.RLock` around
+all read/write paths) because FastAPI runs sync endpoints in a threadpool,
+so concurrent `/reindex` + `/query` calls are real, not hypothetical —
+verified with a stress test that reliably crashed the unlocked version and
+passes clean locked (kept as `test_concurrent_upsert_delete_and_search_do_not_crash_or_desync`
+in `test_vectorstore.py`). `SemanticCache` was stress-tested the same way and
+found to have no equivalent hard-crash risk (list iteration/append/reassignment
+don't desync under the GIL the way the vector store's multi-read-then-index
+pattern did), so it was left unlocked rather than adding a lock nothing needs.
