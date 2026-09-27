@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass, field
 
 from ragsync.embeddings import Embedder
+
+logger = logging.getLogger("ragsync.cache")
 
 
 @dataclass
@@ -52,8 +55,10 @@ class SemanticCache:
                 best_score, best_entry = score, entry
         if best_entry is not None and best_score >= self._threshold:
             self.hits += 1
+            logger.info("cache hit: query=%r score=%.4f", query, best_score)
             return best_entry
         self.misses += 1
+        logger.info("cache miss: query=%r best_score=%.4f", query, best_score)
         return None
 
     def put(self, query: str, answer: str, matched_chunk_ids: list[str], dependent_hashes: set[str]) -> None:
@@ -78,6 +83,8 @@ class SemanticCache:
         removed = len(self._entries) - len(kept)
         self._entries = kept
         self.invalidations += removed
+        if removed:
+            logger.info("invalidated %d cache entries for %d changed hashes", removed, len(changed_hashes))
         return removed
 
     def stats(self) -> dict:

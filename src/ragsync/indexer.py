@@ -1,3 +1,4 @@
+import logging
 import time
 
 from ragsync.document_source import DocumentSource
@@ -5,6 +6,8 @@ from ragsync.embeddings import Embedder
 from ragsync.hashing import chunk_hash
 from ragsync.models import ReindexReport
 from ragsync.vectorstore import VectorStore
+
+logger = logging.getLogger("ragsync.indexer")
 
 
 class Reindexer:
@@ -60,7 +63,7 @@ class Reindexer:
             self._store.delete(deleted_ids)
         self._store.save()
 
-        return ReindexReport(
+        report = ReindexReport(
             added=len(added_ids),
             modified=len(modified_ids),
             deleted=len(deleted_ids),
@@ -68,3 +71,12 @@ class Reindexer:
             duration_seconds=time.monotonic() - start,
             stale_hashes=stale_hashes,
         )
+        logger.info(
+            "reindex complete: added=%d modified=%d deleted=%d unchanged=%d duration=%.3fs",
+            report.added,
+            report.modified,
+            report.deleted,
+            report.unchanged,
+            report.duration_seconds,
+        )
+        return report
