@@ -49,6 +49,9 @@ class VectorStore:
         return self._metadata.get(id_)
 
     def upsert(self, ids: list[str], vectors: list[list[float]], metadata: list[dict] | None = None) -> None:
+        """Insert or replace vectors by id. An id already present is
+        dropped and re-added with its new vector/metadata, not merged.
+        """
         np = self._np
         metadata = metadata or [{} for _ in ids]
         new_vectors = np.array(vectors, dtype=np.float32)
@@ -64,6 +67,7 @@ class VectorStore:
             self._metadata[id_] = meta
 
     def delete(self, ids: list[str]) -> None:
+        """Remove ids from the index. Unknown ids are silently ignored."""
         if not ids:
             return
         np = self._np
@@ -75,6 +79,10 @@ class VectorStore:
             self._metadata.pop(id_, None)
 
     def search(self, query_vector: list[float], top_k: int = 5) -> list[tuple[str, float]]:
+        """Brute-force cosine similarity scan. Returns (id, score) pairs
+        sorted by descending score, since all stored vectors are already
+        unit-normalized by the embedder.
+        """
         if len(self._ids) == 0:
             return []
         np = self._np

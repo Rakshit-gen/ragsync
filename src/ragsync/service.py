@@ -23,6 +23,10 @@ class RagSyncService:
         self._top_k = top_k
 
     def reindex(self, source: DocumentSource) -> ReindexReport:
+        """Diff the source against the current index, re-embed only what
+        changed, and invalidate any cache entries grounded in changed
+        content.
+        """
         report = self._reindexer.reindex(source)
         invalidated = self._cache.invalidate_for_changed_hashes(report.stale_hashes)
         report.invalidated_cache_entries = invalidated
