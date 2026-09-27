@@ -4,6 +4,7 @@ module, not the other way around, so anything usable over HTTP is usable
 without it too.
 """
 
+import logging
 from collections.abc import Callable
 
 from ragsync.cache import SemanticCache
@@ -12,6 +13,8 @@ from ragsync.embeddings import get_embedder
 from ragsync.indexer import Reindexer
 from ragsync.models import QueryResult, ReindexReport
 from ragsync.vectorstore import VectorStore
+
+logger = logging.getLogger("ragsync.service")
 
 AnswerFn = Callable[[str, list[dict]], str]
 
@@ -59,6 +62,9 @@ class RagSyncService:
         answer = answer_fn(query_text, chunks)
         dependent_hashes = {c["content_hash"] for c in chunks if "content_hash" in c}
         self._cache.put(query_text, answer, chunk_ids, dependent_hashes)
+        logger.info(
+            "query answered from %d matched chunks and cached: query=%r", len(chunk_ids), query_text
+        )
 
         return QueryResult(answer=answer, cache_hit=False, matched_chunk_ids=chunk_ids)
 
