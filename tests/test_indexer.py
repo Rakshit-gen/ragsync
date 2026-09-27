@@ -39,3 +39,19 @@ def test_second_reindex_with_no_changes_is_a_full_noop(tmp_path):
     assert report.modified == 0
     assert report.deleted == 0
     assert report.unchanged == 2
+
+
+def test_modified_chunk_content_is_reembedded(tmp_path):
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+    reindexer.reindex(FakeSource([Chunk("doc1", "doc1::0", "hello"), Chunk("doc1", "doc1::1", "world")]))
+
+    report = reindexer.reindex(
+        FakeSource([Chunk("doc1", "doc1::0", "hello there, changed"), Chunk("doc1", "doc1::1", "world")])
+    )
+
+    assert report.added == 0
+    assert report.modified == 1
+    assert report.deleted == 0
+    assert report.unchanged == 1
+    assert store.get_metadata("doc1::0")["text"] == "hello there, changed"
