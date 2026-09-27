@@ -1,3 +1,5 @@
+import pytest
+
 from ragsync.document_source import DocumentSource
 from ragsync.models import Chunk
 from ragsync.service import RagSyncService
@@ -13,6 +15,18 @@ class FakeSource(DocumentSource):
 
 def fake_answer_fn(query: str, chunks: list[dict]) -> str:
     return " ".join(c.get("text", "") for c in chunks) or "no answer"
+
+
+@pytest.mark.parametrize("bad_threshold", [0.0, -0.1, 1.1, 5.0])
+def test_rejects_similarity_threshold_out_of_range(tmp_path, bad_threshold):
+    with pytest.raises(ValueError, match="similarity_threshold"):
+        RagSyncService(str(tmp_path), similarity_threshold=bad_threshold)
+
+
+@pytest.mark.parametrize("bad_top_k", [0, -1, -5])
+def test_rejects_non_positive_top_k(tmp_path, bad_top_k):
+    with pytest.raises(ValueError, match="top_k"):
+        RagSyncService(str(tmp_path), top_k=bad_top_k)
 
 
 def test_reindex_then_query_returns_grounded_answer(tmp_path):

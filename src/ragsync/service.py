@@ -16,6 +16,10 @@ class RagSyncService:
     """
 
     def __init__(self, store_path: str, similarity_threshold: float = 0.92, top_k: int = 5):
+        if not 0.0 < similarity_threshold <= 1.0:
+            raise ValueError(f"similarity_threshold must be in (0, 1], got {similarity_threshold}")
+        if top_k < 1:
+            raise ValueError(f"top_k must be at least 1, got {top_k}")
         self._embedder = get_embedder()
         self._store = VectorStore(store_path)
         self._reindexer = Reindexer(self._store, self._embedder)
