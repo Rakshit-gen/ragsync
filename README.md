@@ -41,8 +41,11 @@ resume) — keep one source of truth and link to it.
 
 | Claim | Value | How measured | Date |
 |---|---|---|---|
-| _e.g. reindex speedup_ | _pending_ | _pending_ | _pending_ |
-| _e.g. cache hit rate_ | _pending_ | _pending_ | _pending_ |
+| Incremental reindex speedup | ~99x (1.72s full vs 0.017s incremental) | `scripts/benchmark.py`: 50 synthetic docs (100 chunks) reindexed from scratch, then again after editing 1 doc (1 modified, 1 deleted, 98 unchanged), local M-series laptop, real ONNX embed calls both times | 2026-09-27 |
+| Semantic cache hit rate | 2/7 = 28.6% on a synthetic query set with 3 known near-duplicate pairs | Same script, `similarity_threshold=0.92` default: 7 queries, 3 of which are paraphrases of 2 earlier queries | 2026-09-27 |
+| Test suite | 48 tests passing, ruff clean | `pytest -q && ruff check .` at commit time | 2026-09-27 |
+
+The 28.6% hit rate is lower than the "3 duplicate pairs out of 7 queries" setup suggests, because `similarity_threshold=0.92` is strict by design — a looser threshold catches more paraphrases but risks serving an answer for a query that wasn't actually asking the same thing. Loosen it per-deployment if your queries are more uniformly phrased than this benchmark's.
 
 ## Architecture
 
@@ -63,4 +66,25 @@ resume) — keep one source of truth and link to it.
 
 ## Status
 
-_What works, what's known-broken, what's untested._
+**Works:** content-hash diffing (add/modify/delete detection), incremental
+re-embedding, the numpy cosine-similarity store with disk persistence, the
+semantic cache with hash-based invalidation (including the multi-chunk
+dependency case — an entry depending on 2 chunks is invalidated if either
+one changes), the FastAPI endpoints, and request validation at the API
+boundary.
+
+**Known simplifications:**
+- `VectorStore` is a brute-force scan, not an ANN index — fine into the low
+  thousands of chunks, not benchmarked beyond that.
+- `SemanticCache` is in-memory only; it does not survive a process restart.
+- `app.py`'s `_placeholder_answer` just concatenates retrieved chunk text —
+  there's no LLM call wired in, by design, to keep this backend-only and
+  network-independent. The real integration point is `RagSyncService.query`'s
+  `answer_fn` parameter.
+- `DirectorySource` only reads `.txt`/`.md` files from a local directory;
+  a different `DocumentSource` implementation is a small amount of code for
+  any other source (DB, API, object storage).
+
+**Untested:** behavior under concurrent reindex + query calls (no locking is
+implemented; this project assumes single-writer usage, like a periodic
+reindex job).
