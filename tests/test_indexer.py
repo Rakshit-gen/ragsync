@@ -1,4 +1,4 @@
-from ragsync.document_source import DocumentSource
+from ragsync.document_source import DirectorySource, DocumentSource
 from ragsync.embeddings import get_embedder
 from ragsync.indexer import Reindexer
 from ragsync.models import Chunk
@@ -121,3 +121,46 @@ def test_empty_corpus_reindex_is_clean(tmp_path):
 
     assert (report.added, report.modified, report.deleted, report.unchanged) == (0, 0, 0, 0)
     assert len(store) == 0
+
+
+def test_reindexing_a_real_empty_directory_is_clean(tmp_path):
+    """FakeSource([]) above proves the diffing logic handles zero chunks;
+    this proves the same through the real DirectorySource -> filesystem path,
+    where an empty directory means zero files to rglob, not an empty list
+    handed in directly.
+    """
+    store_dir = tmp_path / "store"
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    store = VectorStore(str(store_dir))
+    reindexer = Reindexer(store, get_embedder())
+
+    report = reindexer.reindex(DirectorySource(str(docs_dir)))
+
+    assert (report.added, report.modified, report.deleted, report.unchanged) == (0, 0, 0, 0)
+    assert len(store) == 0
+
+
+def test_chunk_reverted_to_original_content_is_reembedded_not_skipped(tmp_path):
+    """A chunk edited and then edited back to its original text must still
+    be treated as a real change at each step (re-embedded, old hash marked
+    stale) rather than the second edit being silently skipped because its
+    resulting hash matches something seen before.
+    """
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+    original = FakeSource([Chunk("doc1", "doc1::0", "hello world")])
+    reindexer.reindex(original)
+    original_hash = store.get_metadata("doc1::0")["content_hash"]
+
+    edited = FakeSource([Chunk("doc1", "doc1::0", "hello there")])
+    edited_report = reindexer.reindex(edited)
+    assert edited_report.modified == 1
+    assert edited_report.stale_hashes == {original_hash}
+    edited_hash = store.get_metadata("doc1::0")["content_hash"]
+    assert edited_hash != original_hash
+
+    reverted_report = reindexer.reindex(original)
+    assert reverted_report.modified == 1
+    assert reverted_report.stale_hashes == {edited_hash}
+    assert store.get_metadata("doc1::0")["content_hash"] == original_hash
