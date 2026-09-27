@@ -1,3 +1,9 @@
+"""Thin FastAPI wrapper over RagSyncService: /reindex, /query, /cache/stats.
+No LLM call is wired into request handling here — _placeholder_answer just
+joins retrieved chunk text, and the real integration point for a generation
+call is RagSyncService.query's answer_fn parameter, not this module.
+"""
+
 from dataclasses import asdict
 from pathlib import Path
 
