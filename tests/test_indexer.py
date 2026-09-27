@@ -79,6 +79,26 @@ def test_modified_and_deleted_chunks_report_their_old_hash_as_stale(tmp_path):
     assert report.stale_hashes == {old_hash_0, old_hash_2}
 
 
+def test_removing_an_entire_document_deletes_all_its_chunks(tmp_path):
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+    reindexer.reindex(
+        FakeSource(
+            [
+                Chunk("doc1", "doc1::0", "hello"),
+                Chunk("doc1", "doc1::1", "world"),
+                Chunk("doc2", "doc2::0", "unrelated"),
+            ]
+        )
+    )
+
+    report = reindexer.reindex(FakeSource([Chunk("doc2", "doc2::0", "unrelated")]))
+
+    assert report.deleted == 2
+    assert report.unchanged == 1
+    assert store.ids() == {"doc2::0"}
+
+
 def test_removed_chunk_is_deleted_from_store(tmp_path):
     store = VectorStore(str(tmp_path))
     reindexer = Reindexer(store, get_embedder())
