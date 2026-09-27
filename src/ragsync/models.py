@@ -29,6 +29,11 @@ class ReindexReport:
     unchanged: int = 0
     duration_seconds: float = 0.0
     invalidated_cache_entries: int = 0
+    # Content hashes that no longer exist in the store after this reindex
+    # (the old hash of every modified or deleted chunk). Any cache entry
+    # whose answer depended on one of these is now grounded in vanished
+    # content and needs invalidating.
+    stale_hashes: set[str] = field(default_factory=set)
 
 
 @dataclass

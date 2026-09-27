@@ -57,6 +57,28 @@ def test_modified_chunk_content_is_reembedded(tmp_path):
     assert store.get_metadata("doc1::0")["text"] == "hello there, changed"
 
 
+def test_modified_and_deleted_chunks_report_their_old_hash_as_stale(tmp_path):
+    store = VectorStore(str(tmp_path))
+    reindexer = Reindexer(store, get_embedder())
+    reindexer.reindex(
+        FakeSource(
+            [
+                Chunk("doc1", "doc1::0", "hello"),
+                Chunk("doc1", "doc1::1", "world"),
+                Chunk("doc1", "doc1::2", "goodbye"),
+            ]
+        )
+    )
+    old_hash_0 = store.get_metadata("doc1::0")["content_hash"]
+    old_hash_2 = store.get_metadata("doc1::2")["content_hash"]
+
+    report = reindexer.reindex(
+        FakeSource([Chunk("doc1", "doc1::0", "hello, changed"), Chunk("doc1", "doc1::1", "world")])
+    )
+
+    assert report.stale_hashes == {old_hash_0, old_hash_2}
+
+
 def test_removed_chunk_is_deleted_from_store(tmp_path):
     store = VectorStore(str(tmp_path))
     reindexer = Reindexer(store, get_embedder())

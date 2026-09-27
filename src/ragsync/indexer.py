@@ -37,6 +37,12 @@ class Reindexer:
         ]
         unchanged_count = len(current) - len(added_ids) - len(modified_ids)
 
+        stale_hashes = set()
+        for cid in modified_ids + deleted_ids:
+            old_meta = self._store.get_metadata(cid)
+            if old_meta and "content_hash" in old_meta:
+                stale_hashes.add(old_meta["content_hash"])
+
         to_upsert_ids = added_ids + modified_ids
         if to_upsert_ids:
             texts = [current[cid].text for cid in to_upsert_ids]
@@ -60,4 +66,5 @@ class Reindexer:
             deleted=len(deleted_ids),
             unchanged=unchanged_count,
             duration_seconds=time.monotonic() - start,
+            stale_hashes=stale_hashes,
         )
