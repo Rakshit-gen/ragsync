@@ -1,3 +1,9 @@
+"""The importable entry point: wires a VectorStore, Reindexer, and
+SemanticCache into one API. app.py is a thin FastAPI wrapper over this
+module, not the other way around, so anything usable over HTTP is usable
+without it too.
+"""
+
 from collections.abc import Callable
 
 from ragsync.cache import SemanticCache
