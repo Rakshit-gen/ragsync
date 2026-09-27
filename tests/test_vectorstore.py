@@ -1,3 +1,7 @@
+import warnings
+
+import numpy as np
+
 from ragsync.vectorstore import VectorStore
 
 
@@ -55,3 +59,24 @@ def test_save_and_reload_round_trips(tmp_path):
     assert reloaded.get_metadata("a") == {"n": 1}
     results = reloaded.search([1.0, 0.0], top_k=1)
     assert results[0][0] == "a"
+
+
+def test_search_over_many_vectors_produces_finite_scores_and_no_uncaught_warnings(tmp_path):
+    """Regression test for a macOS Accelerate BLAS quirk: matmul on some
+    shapes raises spurious RuntimeWarnings even though the output is
+    correct. search() suppresses that specific noise; this test checks the
+    actual values stay finite and nothing else slips through unsuppressed.
+    """
+    rng = np.random.default_rng(0)
+    store = VectorStore(str(tmp_path))
+    vectors = rng.standard_normal((97, 384)).astype(np.float32)
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    store.upsert([f"id{i}" for i in range(97)], vectors.tolist())
+
+    query = vectors[0].tolist()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        results = store.search(query, top_k=5)
+
+    assert results[0][0] == "id0"
+    assert all(np.isfinite(score) for _, score in results)

@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 
 
@@ -87,7 +88,14 @@ class VectorStore:
             return []
         np = self._np
         q = np.array(query_vector, dtype=np.float32)
-        scores = self._vectors @ q
+        # macOS's Accelerate BLAS backend raises spurious divide-by-zero /
+        # overflow / invalid-value RuntimeWarnings on some matmul shapes
+        # even though the output is numerically correct (verified: no
+        # NaN/Inf, values in the expected cosine-similarity range). Known
+        # numpy-on-Accelerate platform quirk, not a real computation error.
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*matmul.*")
+            scores = self._vectors @ q
         top_k = min(top_k, len(self._ids))
         top_indices = np.argsort(-scores)[:top_k]
         return [(self._ids[i], float(scores[i])) for i in top_indices]
